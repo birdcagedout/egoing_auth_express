@@ -6,15 +6,25 @@ const path = require('path');
 // const url = require('url');
 const sanitizeHtml = require('sanitize-html');
 const template = require('../lib/template');
+const auth = require('../lib/authUtils');
 
 
 
 // 글쓰기(create)
 router.get('/create', (req, res) => {
-	var title = 'WEB - create';
+	console.log(auth.isLogged(req));
 
+	// 로그인 되지 않은 경우 undefined임에 유의: false 아님!!
+	if(auth.isLogged(req) !== true) {
+		console.log('you are not logged in');
+		res.redirect('/');
+		return false;
+	}
+
+	var title = 'WEB - create';
 	var list = template.list(req.list);
-	var html = template.html(title, list, `
+	var html = template.html(title, list, 
+		`
 		<form action="/topic/create_process" method="post">
 			<p>
 				<input type="text" name="title" placeholder="title">
@@ -26,8 +36,11 @@ router.get('/create', (req, res) => {
 				<input type="submit">
 			</p>
 		</form>
-	`, 
-	'');
+		`, 
+		'',
+		auth.isLogged(req),
+		auth.getNickname(req)
+	);
 
 	res.send(html);
 });
@@ -36,10 +49,15 @@ router.get('/create', (req, res) => {
 // 글쓰기 처리(create_process)
 // 경로를 글쓰기와 똑같이 '/create'로 해도 된다 ==> 이 경우 request가 GET이면 '글쓰기'가 걸릴 것이고, POST이면 '글쓰기 처리'가 걸려서 처리된다.
 router.post('/create_process', (req, res) => {
-	// 미들웨어 body-parser 사용 후
-	// 1) req.on("data", 콜백) 함수 불필요 <== POST로 데이터가 들어올 때마다 body 변수에 저장할 필요가 없으므로
-	// 2) req.on("end", 콜백) 함수 불필요 <== POST 데이터가 다 들어오면 res로 응답하는 부분을 그냥 써주면 된다
-	// 3) 폼 데이터를 파싱(URLSearchParams)할 필요없이 req.body로 참조할 수 있다. 
+
+	// 로그인 되지 않은 경우 undefined임에 유의: false 아님!!
+	if(auth.isLogged(req) !== true) {
+		console.log('you are not logged in');
+		res.redirect('/');
+		return false;
+	}
+	
+	// 미들웨어 body-parser 사용 후 ==> req.body로 참조할 수 있다. 
 	var post = req.body;
 	var title = post.title;
 	var description = post.description;
@@ -56,10 +74,15 @@ router.post('/create_process', (req, res) => {
 
 // 수정하기(/update)
 router.get('/update/:updateId', (req, res) => {
-	var { updateId } = req.params;
-	// var queryData = url.parse(req.url, true);
-	// console.log(updateId);
 
+	// 로그인 되지 않은 경우 undefined임에 유의: false 아님!!
+	if(auth.isLogged(req) !== true) {
+		console.log('you are not logged in');
+		res.redirect('/');
+		return false;
+	}
+	
+	var { updateId } = req.params;
 	var filteredId = path.parse(updateId).base;
 	fs.readFile(`./data/${filteredId}`, 'utf-8', function(err, description) {
 		var title = filteredId;
@@ -80,7 +103,9 @@ router.get('/update/:updateId', (req, res) => {
 				</p>
 			</form>
 			`,
-			`<a href="/topic/create">CREATE</a> <a href="/topic/update/${title}">UPDATE</a>`
+			`<a href="/topic/create">CREATE</a> <a href="/topic/update/${title}">UPDATE</a>`,
+			auth.isLogged(req),
+			auth.getNickname(req)
 		);
 
 		res.send(html);
@@ -89,6 +114,14 @@ router.get('/update/:updateId', (req, res) => {
 
 // 수정 처리하기(/update_process)
 router.post('/update_process', (req, res) => {
+
+	// 로그인 되지 않은 경우 undefined임에 유의: false 아님!!
+	if(auth.isLogged(req) !== true) {
+		console.log('you are not logged in');
+		res.redirect('/');
+		return false;
+	}
+
 	// 미들웨어 사용 후
 	var post = req.body;
 	var id = post.id;
@@ -107,6 +140,14 @@ router.post('/update_process', (req, res) => {
 
 // 삭제 처리하기(delete_process)
 router.post('/delete_process', (req, res) => {
+
+	// 로그인 되지 않은 경우 undefined임에 유의: false 아님!!
+	if(auth.isLogged(req) !== true) {
+		console.log('you are not logged in');
+		res.redirect('/');
+		return false;
+	}
+	
 	// 미들웨어 사용 후
 	var post = req.body;
 	var id = post.id;
@@ -149,7 +190,9 @@ router.get('/:pageId', (req, res, next) => {
 					<input type="hidden" name="id" value="${sanitizedTitle}">
 					<input type="submit" value="delete">
 				</form>
-				`
+				`,
+				auth.isLogged(req),
+				auth.getNickname(req)
 			);															// delete를 GET방식으로 링크를 드러내서는 안 되므로 POST방식으로 하기 위해 form 사용
 			res.send(html);
 		}

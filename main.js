@@ -1,15 +1,15 @@
-// 생활코딩(egoing)님의 WEB3 Express 강의
-// 
-// 블로그: https://opentutorials.org/module/3590
-// 유튜브: https://www.youtube.com/playlist?list=PLuHgQVnccGMAGOQu8CBDO9hn-FXFmm4Wp
-//
-// Semantic URL: URL에 ?가 들어간 쿼리 스트링을 사용하기보다 가독성이 좋은 계층적 Path로 URL를 구성하는 방법
-// ex. http://localhost:3000/topic?id=0 ==> http://localhost:3000/topic/0
-//
+// 생활코딩(egoing)님의 WEB4 Express Session & Auth 강의
+// 블로그: https://opentutorials.org/module/3648
+// 유튜브: https://www.youtube.com/playlist?list=PLuHgQVnccGMCHjWIDStjaZA2ZR-jwq-WU
 // 4단계. 라우팅까지 완료
+
+
 
 const fs = require('fs');
 const helmet = require('helmet');
+var session = require('express-session');
+var FileStore = require('session-file-store')(session);
+
 
 
 const express = require('express');
@@ -21,31 +21,42 @@ const port = 3000;
 app.use(helmet());
 
 
-// 미들웨어(body-Parser) 사용 1. body-parser
-// app.use(미들웨어 부분), 사용자의 요청이 들어올 때마다 미들웨어 작동함
+// 미들웨어(body-Parser) body-parser: (클라이언트의) 폼 데이터 POST 요청 처리, req.body라는 프로퍼티가 생긴다
 const bodyParser = require('body-parser');
-
-// (클라이언트의) 폼 데이터 POST 요청에 대해서 사용
-// 이제 app.post(경로, (req, res){})의 req 객체에는 (전에는 없었던) body라는 프로퍼티가 생긴다
-app.use(bodyParser.urlencoded({extended: false}));
-
-// json 요청에 대해서 사용
-// app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: false}));		// 다른 경로의 router 파일에도 똑같이 적용
 
 
-// 미들웨어(body-Parser) 사용 2. compression ==> 67.5KB -> 5KB
+// 미들웨어(body-Parser) compression: 사용시 텍스트 파일 전송 67.5KB -> 5KB
 const compression = require('compression');
 app.use(compression());
 
 
 
-// 미들웨어 작성: 미들웨어는 "함수"이다. ==> https://expressjs.com/ko/guide/writing-middleware.html
-// 매번 ./data 읽어서 파일 목록 가져오는 부분을 미들웨어로 만들어본다.
 
-// 버전1. 모든 요청(GET. POST)에 대해서 파일목록을 가져오는 IO를 처리하는 것은 비효율적 (POST 요청에 대해서는 파일목록을 가져올 필요가 없다)
-// app.use(function(req, res, next) {
+// 세션 설치
+// - secret(필수): session ID cookie를 sign할 때 필요한 스트링, parsing 예측 불가한 랜덤한 게 제일 좋음 ==> 기본문자열 + 클라이언트 식별문자열 + 시간적 요소(매번 바뀌면 매번 새로운 세션 생성되므로 안 됨)
+// - resave(옵션): session값이 변경되지 않았어도 무조건 store에 저장할지 여부. false이면 session값이 바뀌었을 때만 store에 저장한다. ==> 무조건 false 추천
+// - saveUninitialized(옵션): initialize되지 않은 세션도 강제로 store에 저장할지 여부. false이면 session이 필요하기 전(로그인 전)까지는 session을 store로 저장하지 않는다.
 
-// 버전2. 따라서 모든 GET 요청인 경우에만 파일목록을 가져오는 미들웨어를 작동시킨다
+var options = {
+	// secret: 'sunw001010' + 'grpay' + new Date(),		// secret.split('grpay') ==> [ 'sunw001010', 'Thu Sep 21 2023 18:52:07 GMT+0900 (Korean Standard Time)' ]
+	secret: 'sunw001010' + 'grpay',
+  resave: false,
+  saveUninitialized: true,
+	store: new FileStore(),
+	// name: 'my_session_id',		// 기본값은 connect.sid
+	// secure: true,						// https에서만 세션 생성하도록
+};
+module.exports = options;
+
+app.use(session(options));
+
+
+
+
+
+
+// 미들웨어 작성. 모든 GET 요청인 경우에만 파일목록을 가져오는 미들웨어를 작동시킨다
 app.get("*", function(req, res, next) {
 	fs.readdir('./data', function(err, fileList) {	// fileList = [ 'CSS', 'HTML', 'JavaScript' ]
 		req.list = fileList;
@@ -59,28 +70,23 @@ app.get("*", function(req, res, next) {
 app.use(express.static('public'));		// http://localhost:3000/images/hello.jpg
 
 
-// 라우터 설정1
-// '/topic'이라는 경로에 topicRouter라는 미들웨어를 적용함
+// 라우터 설정1: '/topic'
 var topicRouter = require('./routes/topic.js');
 app.use('/topic', topicRouter);
 
-// 라우터 설정2
-// '/'이라는 경로에 indexRouter라는 미들웨어를 적용함
+// 라우터 설정2: '/'
 var indexRouter = require('./routes/index');
 app.use('/', indexRouter);
 
+// 라우터 설정2: '/auth'
+var authRouter = require('./routes/auth.js');
+app.use('/auth', authRouter);
 
 
 
-// 위의 모든 경로에서 처리가 끝난 후에도 걸린 게 없는 경우 ==> ERROR 페이지 로드 404
-// app.use( 미들웨어1, 미들웨어2) ==> 미들웨어1에서 next()를 사용하면 미들웨어2가 호출된다
-// (주의!!) 미들웨어1에서 req.send(또는 json, end)을 호출해버리면 미들웨어2에서 다시는 호출할 수 없다(에러 발생)
-var info404;
-app.use( (req, res, next) => {
-	info404 = `[req.ip] ${req.ip}<br> [req.url] ${req.url}<br> [req.path] ${req.path}<br>`;		// url은 쿼리까지 모두 포함, path는 경로까지만(물음표 직전까지)
-	next();
-}, (req, res, next) => {		// 콤마로 연결하여 다른 미들웨어를 더 붙일 수도 있다. 
-	res.status(404).send(info404 + '<h2>404<br>Page Not Found</h2>');
+// ERROR 페이지: 404
+app.use((req, res, next) => {
+	res.status(404).send('<h2>404<br>Page Not Found</h2>');
 	console.log('404 실행되었음');
 });
 
